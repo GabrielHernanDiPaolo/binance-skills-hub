@@ -135,7 +135,7 @@ baw limit-order list --status WORKING --json
 {
   "success": true,
   "data": {
-    "total": 1,
+    "total": 2,
     "page": 1,
     "pageSize": 20,
     "list": [
@@ -155,11 +155,48 @@ baw limit-order list --status WORKING --json
         "txHash": null,
         "bookTime": "2026-04-01T19:14:52+08:00",
         "updatedTime": "2026-04-01T19:14:52+08:00"
+      },
+      {
+        "orderType": "limit",
+        "strategyId": "9876543211",
+        "chain": "56",
+        "side": "BUY",
+        "fromToken": "0x55d398326f99059fF775485246999027B3197955",
+        "fromTokenName": "USDT",
+        "fromTokenQty": "10",
+        "toToken": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+        "toTokenName": "BNB",
+        "toTokenActualQty": "0.0167",
+        "triggerPrice": "600",
+        "status": "FINISHED",
+        "slippage": "0.1",
+        "txHash": "0xabcdef...",
+        "bookTime": "2026-04-01T19:20:00+08:00",
+        "updatedTime": "2026-04-01T19:31:05+08:00",
+        "refund": [
+          { "tokenAddress": "0x55d398326f99059fF775485246999027B3197955", "amount": "0.000000008796", "symbol": "USDT" }
+        ]
       }
     ]
   }
 }
 ```
+
+### Partial fill and `refund`
+
+A `FINISHED` limit order may carry an optional `refund` array listing tokens returned to the user.
+
+- **Report a refund only for valid, non-empty `refund` entries.** Then the order was **partially filled**: say so, state the received amount (`toTokenActualQty`), and list each refunded `amount` + `symbol`. Do not just say "success".
+- **A missing `refund` does not prove a full fill.** The CLI omits the field whenever the raw data is absent, unparsable, empty or malformed, so "no `refund`" only means no refund information is available. Report the actual received amount (`toTokenActualQty`); do not claim the order was filled in full.
+- **A refund alone does not tell you why.** Do not attribute it to a specific cause (e.g. a holding cap) unless something else confirms it.
+
+| Field                    | Description                                 |
+|--------------------------|---------------------------------------------|
+| `refund[].tokenAddress`  | Contract address of the refunded token      |
+| `refund[].amount`        | Refunded amount, human-readable             |
+| `refund[].symbol`        | Symbol of the refunded token                |
+
+Use `symbol` as returned; do not substitute it from `tokenAddress`.
 
 ### Limit Order Status
 
@@ -181,7 +218,7 @@ A `success: true` response with a `strategyId` from `limit-order buy` / `limit-o
 2. **`WORKING` is the expected resting state, not "still processing".** A limit order waits for its trigger price and can sit in `WORKING` for days. Tell the user it is resting and how to check it later (`limit-order list --strategyId <id> --json`) — **do not poll a `WORKING` order to a terminal state**, and do not imply it is about to execute.
 3. **Once the status reaches `TRIGGERED` or `PENDING`**, the order is actually executing. Only then does polling to a terminal state make sense.
 4. **Report each terminal status for what it is:**
-   - `FINISHED` → filled; include `txHash` and the actual amount.
+   - `FINISHED` → filled; include `txHash` and the actual amount. **Check `refund` on the order:** if it has valid, non-empty entries, it was a **partial fill** — say so and list the refunded amount(s). A missing `refund` does not prove a full fill (see [Partial fill and `refund`](#partial-fill-and-refund)).
    - `FAILED` → on-chain execution failed; say so plainly.
    - `EXPIRED` → the trigger price was never reached and the order is dead. **Tell the user** — do not leave it looking like it is still waiting.
    - `CANCELED` → canceled. Same: state it explicitly.

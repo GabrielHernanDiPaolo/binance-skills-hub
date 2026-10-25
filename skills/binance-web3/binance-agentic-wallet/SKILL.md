@@ -6,6 +6,7 @@ description: |
   wallet settings, daily limit, slippage, MEV protection, supported chains,
   send to ENS domain, send to .eth or .bnb name, resolve domain name to address, domain-based transfer,
   send to .ai Agent ID name,
+  Agent ID claim status, whether I claimed my .ai space id / Agent ID, get my .ai domain,
   prediction market, place prediction, redeem winnings, prediction PnL,
   x402 payment, HTTP 402 Payment Required,
   check/revoke/manage token approvals,
@@ -17,8 +18,8 @@ description: |
   or any on-chain wallet operation.
 metadata:
   author: binance-web3-team
-  version: '1.13.0'
-  requiredCliVersion: '1.11.0'
+  version: '1.14.0'
+  requiredCliVersion: '1.12.0'
   openclaw:
     requires:
       bins:
@@ -38,7 +39,8 @@ This skill drives the `baw` CLI to manage a Binance Web3 wallet — sign-in/sign
 
 | User Intent                                                          | Command                               | Reference                                         |
 |----------------------------------------------------------------------|---------------------------------------|---------------------------------------------------|
-| Campaign / 大赛 / bStock PnL competition; buy/sell a bStock (币股)    | (see reference)                       | [campaign.md](references/campaign.md)             |
+| Agent ID 专属内盘 / Agent ID exclusive token launch → 查看或买入       | (see reference)                       | [agent-id-exclusive-token-launches.md](references/agent-id-exclusive-token-launches.md) |
+| Check if I have claimed an Agent ID / get my .ai domain               | `wallet agent-id`                     | [agent-id-claim-status.md](references/agent-id-claim-status.md) |
 | Sign in / connect wallet                                             | `auth signin` → `auth verify`         | [authentication.md](references/authentication.md) |
 | Sign out / disconnect wallet                                         | `auth signout`                        | [authentication.md](references/authentication.md) |
 | Check if wallet is connected                                         | `wallet status`                       | [wallet-view.md](references/wallet-view.md)       |
@@ -103,11 +105,23 @@ This skill drives the `baw` CLI to manage a Binance Web3 wallet — sign-in/sign
 
 ---
 
-## Campaign (time-limited)
+## Agent ID exclusive token launches
 
-A time-limited bStock trading campaign may be running. When the user asks about the **campaign / 大赛 / AI trading campaign / bStock PnL competition**, or asks to **buy or sell a tokenized stock (bStock / 币股)** in a campaign context, read [campaign.md](references/campaign.md) and follow it — that file is the single source of truth for the active campaign, it states its own validity window, and its rules override the generic swap flow while it is running.
+When the user mentions **Agent ID 专属内盘 / Agent ID exclusive** and wants to see or buy
+such a token, read [agent-id-exclusive-token-launches.md](references/agent-id-exclusive-token-launches.md) and follow it. That file covers the whole path: querying the
+`meme-rush` skill for the `openfour.meme.AgentIdExclusive` sub-type, reading the returned row, and the swap itself.
 
-Once the current date is past the end date stated at the top of that file, ignore it entirely and do not bring the campaign up. Every other wallet feature in this skill works normally regardless of whether a campaign is active.
+On that path the Agent ID gate applies to **trading during the bonding-curve stage**, not to who may launch — any address
+can launch such a token on Four.meme, but until it migrates only Agent ID holders can buy, and only Agent ID holders
+and the token's issuer can sell. After it migrates, every address can buy and sell. The user's wallet therefore needs
+an Agent ID to buy one before it migrates. The swap security pre-check runs as usual; on that
+path only, the agent may **ask** the user whether to skip it (see the reference file). Every other launchpad token goes
+through [security.md](references/security.md) with no skip offer.
+
+This is unrelated to `.ai` **Agent ID domain names** in [domain-resolve.md](references/domain-resolve.md) — that is a
+name-resolution feature for transfers, not a trading entitlement. Do not conflate the two.
+
+For any other launchpad / new-token discovery question, use the `meme-rush` skill directly.
 
 ---
 
@@ -125,8 +139,8 @@ Always follow these steps to build the command correctly:
 2. **Build the command.** Use the exact syntax from the reference file.
 3. **Always append `--json`.** This ensures the output is machine-readable JSON. Every command supports this flag.
 4. **Confirm before execution.** Confirm with the user each time before any state-changing command, unless the user explicitly asks to skip confirmation. Remind the user to do their own research (DYOR). For trades without explicit slippage, disclose the default ("auto"). Only proceed on clear affirmative replies (e.g., "yes", "confirm", "go ahead"). Treat anything else as non-confirmation and re-prompt.
-   - **Payment-token selection.** When the user names what to buy and how much but does not specify which token to pay with (the `fromToken`): **outside a campaign**, if the wallet holds a suitable token with sufficient balance, pick one and proceed — don't make it a separate question. **In a campaign context, always ask first** — only BNB/USDT/USDC/U/USD1 count toward campaign PnL, so a silently-picked token can void the trade's score (see [campaign.md](references/campaign.md)). If no suitable payment token is available, tell the user to top up or swap first. Either way this does not waive the confirmation of the trade itself.
-5. **External sign two-step flow.** Before `contract-call` or `sign-message`, run `wallet settings --json` and confirm `devMode.enabled=true`. Then run `preview`, show the user the parsed transaction/message and risk details, get explicit confirmation, and only then run `execute` with the `requestId` from the preview. If preview returns an error, do not attempt `execute`.
+   - **Payment-token selection.** When the user names what to buy and how much but does not specify which token to pay with (the `fromToken`): if the wallet holds a suitable token with sufficient balance, pick one and proceed — don't make it a separate question. If no suitable payment token is available, tell the user to top up or swap first. Either way this does not waive the confirmation of the trade itself.
+5. **External sign two-step flow.** As soon as a request needs `contract-call` or `sign-message`, run `wallet settings --json` and confirm `devMode.enabled=true` — before building or previewing anything. If it is off or expired, tell the user how to enable it in the Binance App (Agentic Wallet management page → Settings → Developer Mode; steps in [external-sign.md](references/external-sign.md#enabling-developer-mode)) and wait until it is on. Then run `preview`, show the user the parsed transaction/message and risk details, get explicit confirmation, and only then run `execute` with the `requestId` from the preview. If preview returns an error, do not attempt `execute`.
 6. **`contract-call --value` is in wei**, not human-readable like `--amount` in other commands. 1 BNB is `--value 1000000000000000000`.
 7. **Conditional/triggered instructions: never silently downgrade to immediate execution.** When the user's instruction carries a *condition* — "sell when it hits $310", "buy if it drops to $Y", "when the price reaches Z" — that is a **trigger order** (use `limit-order`), NOT an immediate market order. If the conditional order cannot be placed (e.g. `limit-order` returns an error such as `Ondo-related tokens cannot be traded`, or the asset/venue doesn't support limit orders):
    - **Do NOT fall back to `market-order swap` to execute immediately at the current price.** Executing now at a price the user did not agree to violates their intent and is irreversible.
@@ -182,7 +196,6 @@ GET https://www.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/market/
 The same ticker often exists under more than one provider (e.g. both `DRAMon` and `DRAMB`), so pick the one the user means:
 
 - **Explicit suffix** — a `…B` symbol (e.g. "DRAMb") → `type=3` bStock; a `…on` symbol → `type=1` Ondo. Resolve directly, no need to ask.
-- **Campaign context** (a campaign is running and the user is trading for it) → `type=3` bStock; see [campaign.md](references/campaign.md).
 - **Bare ticker with no suffix** (e.g. "buy the DRAM stock token") — **do not default to Ondo. Ask the user which provider they mean** before resolving, then proceed.
 
 The `binance-tokenized-securities-info` skill is optional — it wraps the same API and adds live price / market status. Older versions of it only know `type=1` (Ondo), so resolve bStock against the endpoint above rather than assuming that skill can. If the user wants it and it is not installed, ask: "Install `binance-tokenized-securities-info` from https://github.com/binance/binance-skills-hub to look up its info?" and install only after a clear "yes".
