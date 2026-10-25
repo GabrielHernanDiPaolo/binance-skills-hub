@@ -2,7 +2,20 @@
 
 Use Developer Mode to preview and execute user-built contract calls and message signatures. These commands are intentionally two-step: first preview and inspect the parsed operation and security result, then execute only after explicit user confirmation.
 
-Developer Mode can only be enabled or configured in the Binance App. Use `baw wallet settings --json` to check whether Developer Mode is active before attempting external signing. If `devMode.enabled` is false, tell the user to enable Developer Mode in the Binance App instead of running preview.
+Developer Mode can only be enabled or configured in the Binance App. Use `baw wallet settings --json` to check whether Developer Mode is active before attempting external signing. **Check it as soon as you know the request needs `contract-call` or `sign-message`** — before building calldata, quoting or previewing — so the user does not find out only at the last step. If `devMode.enabled` is false or `devMode.expiresAt` is in the past, do not run preview: tell the user Developer Mode is off and how to turn it on (below), and continue once they confirm it is on.
+
+### Enabling Developer Mode
+
+Tell the user to do this in the Binance App — it cannot be done through the CLI:
+
+1. Open the **Agentic Wallet management page → Settings** (top-right icon).
+2. Turn on **Developer Mode**.
+3. Read and confirm the **Risk Warning**.
+4. Approve the signature request the App shows.
+
+- The wallet's total balance must be under the Developer Mode balance cap, otherwise enabling is refused (`351804`).
+- Once on, Developer Mode stays active for 7 days, and each successful use extends it. After it expires (`351802`), enable it again the same way.
+- After the user says it is on, re-run `baw wallet settings --json` and confirm `devMode.enabled: true` before continuing.
 
 ---
 

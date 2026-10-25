@@ -56,7 +56,7 @@ A `success: true` response with an `orderId` means the swap has only been **subm
 1. **Do NOT tell the user the swap succeeded yet.** At most say it has been *submitted* and you are confirming.
 2. **Poll `market-order list --orderId <orderId> --json` until `status` reaches a terminal state** (`FINISHED` or `FAILED`). `PENDING` is not terminal — keep polling.
 3. **Report based on the terminal status, not on the submit response:**
-   - `FINISHED` → report success, include `txHash` and actual received amount.
+   - `FINISHED` → report success, include `txHash` and actual received amount. **Check `refund` on the order:** if it has valid, non-empty entries, it was a **partial fill** — say so and list the refunded amount(s). A missing `refund` does not prove a full fill (see [Partial fill and `refund`](#partial-fill-and-refund)).
    - `FAILED` → **tell the user it failed** (note `txHash` may be `null`); do not present it as success or leave it ambiguous. Suggest retrying or a different token if appropriate.
    - Still `PENDING` after a reasonable wait (e.g. ~30s) → tell the user it is *still processing*, not that it succeeded; keep an eye on it or let them re-check with `market-order list`.
 
@@ -149,7 +149,7 @@ baw market-order list --status PENDING --json
 {
   "success": true,
   "data": {
-    "total": 1,
+    "total": 2,
     "page": 1,
     "pageSize": 20,
     "list": [
@@ -167,11 +167,46 @@ baw market-order list --status PENDING --json
         "txHash": "0xabcdef...",
         "bookTime": "2026-04-01T23:46:54+08:00",
         "updatedTime": "2026-04-01T23:46:56+08:00"
+      },
+      {
+        "orderType": "market",
+        "orderId": "1234567891",
+        "chain": "56",
+        "fromToken": "0x55d398326f99059fF775485246999027B3197955",
+        "fromTokenName": "USDT",
+        "fromTokenQty": "10",
+        "toToken": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+        "toTokenName": "BNB",
+        "toTokenActualQty": "0.0167",
+        "status": "FINISHED",
+        "slippage": "0.5000",
+        "txHash": "0xabcdef...",
+        "bookTime": "2026-04-01T23:50:10+08:00",
+        "updatedTime": "2026-04-01T23:50:12+08:00",
+        "refund": [
+          { "tokenAddress": "0x55d398326f99059fF775485246999027B3197955", "amount": "0.000000008796", "symbol": "USDT" }
+        ]
       }
     ]
   }
 }
 ```
+
+### Partial fill and `refund`
+
+A `FINISHED` order may carry an optional `refund` array listing tokens returned to the user.
+
+- **Report a refund only for valid, non-empty `refund` entries.** Then the order was **partially filled**: say so, state the received amount (`toTokenActualQty`), and list each refunded `amount` + `symbol`. Do not just say "success".
+- **A missing `refund` does not prove a full fill.** The CLI omits the field whenever the raw data is absent, unparsable, empty or malformed, so "no `refund`" only means no refund information is available. Report the actual received amount (`toTokenActualQty`); do not claim the order was filled in full.
+- **A refund alone does not tell you why.** Do not attribute it to a specific cause (e.g. a holding cap) unless something else confirms it.
+
+| Field                    | Description                                 |
+|--------------------------|---------------------------------------------|
+| `refund[].tokenAddress`  | Contract address of the refunded token      |
+| `refund[].amount`        | Refunded amount, human-readable             |
+| `refund[].symbol`        | Symbol of the refunded token                |
+
+Use `symbol` as returned; do not substitute it from `tokenAddress`.
 
 ### Market Order Status
 

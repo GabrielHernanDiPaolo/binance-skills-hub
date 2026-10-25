@@ -149,12 +149,12 @@ baw wallet address --json
 
 ## `wallet balance`
 
-Query token balances. Only tokens with a value of at least $0.01 USD are returned; tokens worth less than $0.01 are hidden by CLI.
+Query token balances. Tokens with a zero balance are never returned. Tokens worth less than $0.01 USD — including tokens with no price yet — are **hidden by default**, but **not when `--tokenAddress` is given**; `--hideLowValue true|false` overrides either default.
 
 ### Syntax
 
 ```bash
-baw wallet balance [--symbol <symbol>] [--tokenAddress <tokenAddress>] [--binanceChainId <binanceChainId>] --json
+baw wallet balance [--symbol <symbol>] [--tokenAddress <tokenAddress>] [--binanceChainId <binanceChainId>] [--hideLowValue <true|false>] --json
 ```
 
 ### Parameters
@@ -164,6 +164,7 @@ baw wallet balance [--symbol <symbol>] [--tokenAddress <tokenAddress>] [--binanc
 | `--symbol`         | No       | —       | Filter by token symbol (e.g., `BNB`, `USDT`, `USDC`)                                  |
 | `--tokenAddress`   | No       | —       | Filter by token contract address                                                      |
 | `--binanceChainId` | No       | —       | Binance chain ID: `56` (BSC), `CT_501` (Solana). For a full list, see `wallet chains` |
+| `--hideLowValue`   | No       | `true`; `false` when `--tokenAddress` is set | `true` hides tokens worth under $0.01 (incl. unpriced tokens); `false` shows them. An explicit value always wins |
 
 ### Example
 
@@ -173,7 +174,16 @@ baw wallet balance --json
 
 # Query USDT balance only
 baw wallet balance --symbol USDT --json
+
+# Holding of one specific token — low-value / unpriced holdings are included by default
+baw wallet balance --tokenAddress <contractAddress> --binanceChainId 56 --json
+
+# Every non-zero holding, including dust and unpriced tokens
+baw wallet balance --hideLowValue false --json
 ```
+
+A token with no price is returned with `price` and `value` of `"0"` — that means the price is **unknown**, not that the
+holding is worthless.
 
 ### Response
 
