@@ -185,6 +185,35 @@ bonding-curve trade needs Developer Mode and how to turn it on ([external-sign.m
 Binance App → Agentic Wallet management page → Settings → Developer Mode → confirm the Risk Warning → approve the
 signature). Continue only after `wallet settings` shows it on. Do not switch to `market-order` instead.
 
+### When the user did not say "Agent ID"
+
+Before a BNB Smart Chain (BSC) `market-order` or `limit-order`
+(binanceChainId `56`), look at the contract address of the token being traded — `toToken` for a buy, `fromToken` for a
+sell. **Run the `info` check only if that address ends in `4444` or `ffff`** (case-insensitive). Four.meme / Open Four
+token addresses use these vanity suffixes — every Open Four token listed by `meme-rush` does. Any other address is never
+checked.
+
+Run it **in parallel with** the security audit and `market-order quote` rather than before them, so it adds no waiting:
+
+```bash
+node <skill-dir>/scripts/agent-id-exclusive-token-launches.mjs info '{"token":"<token>","wallet":"<bscAddress>"}'
+```
+
+| Result | Do this |
+|---|---|
+| `route: "contract-call"` | It is an Agent ID exclusive token still on the bonding curve. Tell the user in one line ("this is an Agent ID exclusive token on the bonding curve, so it trades through Developer Mode") and continue with this file from the Developer Mode check above. Do not place the market or limit order |
+| `route: "wait"`; or `route: "unavailable"` with `isAgentIdExclusive: true` | The token cannot be traded right now — it is migrating to a DEX, or it is an Agent ID exclusive token that is paused (see `curve.phase` / `curve.paused`). Tell the user and do not place the order |
+| `route: "market-order"` (migrated, or not an Agent ID exclusive token), or `"unsupported"`; or `"unavailable"` with `isAgentIdExclusive: false` | Not this flow. Continue the normal market / limit order **without mentioning Agent ID or this check** |
+| `success: false` (e.g. `RPC_UNAVAILABLE`) | Continue the normal flow |
+
+If the result is `contract-call` or the token cannot be traded now, discard the market-order quote you got in
+parallel. If the check itself failed (`success: false`) and the market / limit order then fails, run `info` once more
+before reporting the failure.
+
+Cost: zero for tokens on other chains and for addresses without the suffix; otherwise one read-only call (about 1.5 s)
+that runs alongside the audit and quote. Run it once per token per conversation unless the user asks
+again later (the token may migrate in the meantime).
+
 ### Token security audit: on by default, the user may skip it
 
 Run the swap security pre-check in [security.md §1](security.md#1-swap-security-pre-check) as usual. Because these are
